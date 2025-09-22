@@ -1,0 +1,21 @@
+[package]
+name = "savitzky_golay"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "A high-performance Savitzky-Golay filter implementation for signal smoothing and differentiation"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/savitzky-golay"
+keywords = ["signal-processing", "filter", "smoothing", "savitzky-golay", "numerical"]
+categories = ["science", "algorithms"]
+readme = "README.md"
+
+[lib]
+name = "savitzky_golay"
+path = "src/lib.rs"
+
+[dependencies]
+nalgebra = "0.32"
+
+[dev-dependencies]
+approx = "0.5"
