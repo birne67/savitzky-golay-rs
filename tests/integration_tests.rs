@@ -81,7 +81,7 @@ fn test_derivative_computation() {
         })
         .collect();
     
-    let first_derivative = filter.apply_derivative(&data, 1);
+    let first_derivative = filter.apply_derivative(&data, 1, step);
     
     // Check derivative values in the interior
     for i in 3..17 {

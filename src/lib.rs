@@ -31,6 +31,7 @@ mod error;
 
 pub use filter::{SavitzkyGolayFilter, BoundaryMode, FilterConfig};
 pub use error::{SavitzkyGolayError, Result};
+pub use coefficients::compute_coefficients;
 
 /// Applies a Savitzky-Golay filter to the input data with default parameters.
 ///
@@ -72,5 +73,5 @@ pub fn smooth(data: &[f64]) -> Vec<f64> {
 /// A Result containing the derivative data or an error
 pub fn derivative(data: &[f64], window_size: usize, poly_order: usize) -> Result<Vec<f64>> {
     let mut filter = SavitzkyGolayFilter::new(window_size, poly_order)?;
-    Ok(filter.apply_derivative(data, 1))
+    Ok(filter.apply_derivative(data, 1, 1.0))
 }

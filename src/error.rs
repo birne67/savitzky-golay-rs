@@ -11,6 +11,8 @@ pub enum SavitzkyGolayError {
     InsufficientData(usize, usize),
     /// Mathematical computation error (e.g., singular matrix)
     ComputationError(String),
+    /// Invalid input parameters
+    InvalidInput(String),
 }
 
 impl fmt::Display for SavitzkyGolayError {
@@ -35,6 +37,9 @@ impl fmt::Display for SavitzkyGolayError {
             }
             SavitzkyGolayError::ComputationError(msg) => {
                 write!(f, "Computation error: {}", msg)
+            }
+            SavitzkyGolayError::InvalidInput(msg) => {
+                write!(f, "Invalid input: {}", msg)
             }
         }
     }

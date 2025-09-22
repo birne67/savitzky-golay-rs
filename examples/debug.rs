@@ -34,4 +34,17 @@ fn main() {
     let mut impulse_filter = SavitzkyGolayFilter::new(5, 2).unwrap();
     let filtered_impulse = impulse_filter.apply(&impulse_data);
     println!("Filtered impulse: {:?}", filtered_impulse);
+    
+    // Test quadratic preservation
+    println!("\nTesting quadratic preservation:");
+    let quadratic_data: Vec<f64> = (0..10).map(|i| (i as f64).powi(2)).collect();
+    println!("Input quadratic data: {:?}", quadratic_data);
+    
+    let filtered_quad = filter.apply(&quadratic_data);
+    println!("Filtered data: {:?}", filtered_quad);
+    
+    println!("\nDifferences:");
+    for (i, (orig, filt)) in quadratic_data.iter().zip(filtered_quad.iter()).enumerate() {
+        println!("  [{}]: {:.6} -> {:.6} (diff: {:.6})", i, orig, filt, orig - filt);
+    }
 }

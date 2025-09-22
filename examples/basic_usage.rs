@@ -42,6 +42,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let smoothed_mirror = mirror_filter.apply(&noisy_signal);
     print_signal(&smoothed_mirror);
 
+    // Example 3b: Nearest boundary mode
+    println!("\n3b. Nearest boundary mode:");
+    let mut nearest_filter = SavitzkyGolayFilter::new(5, 2)?
+        .with_boundary_mode(BoundaryMode::Nearest);
+    let smoothed_nearest = nearest_filter.apply(&noisy_signal);
+    print_signal(&smoothed_nearest);
+
     // Example 4: First derivative
     println!("\n4. First derivative:");
     let first_deriv = derivative(&clean_signal, 7, 2)?;
@@ -50,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Example 5: Second derivative
     println!("\n5. Second derivative:");
     let mut deriv_filter = SavitzkyGolayFilter::new(7, 3)?;
-    let second_deriv = deriv_filter.apply_derivative(&clean_signal, 2);
+    let second_deriv = deriv_filter.apply_derivative(&clean_signal, 2, 1.0);
     print_signal(&second_deriv);
 
     // Example 6: Performance comparison

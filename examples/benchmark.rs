@@ -40,7 +40,7 @@ fn main() {
             
             // Benchmark first derivative
             let start = Instant::now();
-            let _derivative = filter.apply_derivative(&data, 1);
+            let _derivative = filter.apply_derivative(&data, 1, 1.0);
             let deriv_duration = start.elapsed();
             
             println!("  {}: smooth={:?}, derivative={:?}", 

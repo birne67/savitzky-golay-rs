@@ -46,7 +46,7 @@ let first_deriv = derivative(&data, 7, 2)?;
 
 // Compute second derivative
 let mut filter = SavitzkyGolayFilter::new(7, 3)?;
-let second_deriv = filter.apply_derivative(&data, 2);
+let second_deriv = filter.apply_derivative(&data, 2, 1.0);
 ```
 
 ### Advanced Configuration
@@ -115,10 +115,10 @@ let signal: Vec<f64> = (0..20)
 
 // Compute first derivative (should be ≈ 2x)
 let mut filter = SavitzkyGolayFilter::new(7, 3)?;
-let first_deriv = filter.apply_derivative(&signal, 1);
+let first_deriv = filter.apply_derivative(&signal, 1, 1.0);
 
 // Compute second derivative (should be ≈ 2)
-let second_deriv = filter.apply_derivative(&signal, 2);
+let second_deriv = filter.apply_derivative(&signal, 2, 1.0);
 ```
 
 ### Multiple Filter Configurations
@@ -215,3 +215,20 @@ at your option.
 - Savitzky, A.; Golay, M.J.E. (1964). "Smoothing and Differentiation of Data by Simplified Least Squares Procedures". Analytical Chemistry. 36 (8): 1627–1639.
 - Numerical Recipes in C: The Art of Scientific Computing
 - [Wikipedia: Savitzky-Golay filter](https://en.wikipedia.org/wiki/Savitzky%E2%80%93Golay_filter)
+
+
+
+# Modes
+Savitzky-Golay filters require handling signal edges where the moving window extends beyond the data. The modes you mentioned (e.g., from MATLAB's sgolayfilt or SciPy's implementations) specify how to pad or extrapolate the signal at boundaries. These aren't directly part of coefficient computation (which your compute_coefficients function handles) but apply during convolution with the signal.
+
+Here's a brief overview of common modes:
+
+Mirror (or "symmetric"): Reflects the signal at the boundary. For example, if the signal is [a, b, c] and the window needs padding, it becomes [b, a, b, c, b] (mirroring around the edge). This preserves symmetry and is good for smooth signals.
+
+Constant (or "edge"): Pads with the constant value of the nearest edge point. E.g., [a, b, c] becomes [a, a, b, c, c]. Simple but can introduce discontinuities.
+
+Nearest: Repeats the nearest value. Similar to constant but can be more abrupt; often equivalent to constant for edges.
+
+Wrap (or "periodic"): Wraps the signal cyclically. E.g., [a, b, c] becomes [c, a, b, c, a]. Useful for periodic signals but can create artifacts if the signal isn't truly periodic.
+
+Interp (or "linear"): Linearly interpolates or extrapolates values beyond the edges. E.g., extrapolate based on the slope at the boundary. This can reduce edge artifacts but is more computationally intensive.
