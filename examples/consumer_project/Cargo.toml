@@ -1,0 +1,8 @@
+[package]
+name = "sg_consumer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Use a path dependency pointing to the local crate under the workspace
+savitzky_golay = { path = "../../" }
