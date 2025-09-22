@@ -14,6 +14,8 @@ pub enum BoundaryMode {
     Zero,
     /// Repeat nearest values (same as constant for edges)
     Nearest,
+    /// Linear interpolation/extrapolation at boundaries
+    Interp,
     /// Use smaller windows near boundaries
     Shrink,
 }
@@ -114,7 +116,7 @@ impl SavitzkyGolayFilter {
     /// use savitzky_golay::SavitzkyGolayFilter;
     ///
     /// let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 4.0, 3.0, 2.0, 1.0];
-    /// let filter = SavitzkyGolayFilter::new(5, 2).expect("Valid parameters");
+    /// let mut filter = SavitzkyGolayFilter::new(5, 2).expect("Valid parameters");
     /// let smoothed = filter.apply(&data);
     /// ```
     pub fn apply(&mut self, data: &[f64]) -> Vec<f64> {
@@ -212,8 +214,9 @@ impl SavitzkyGolayFilter {
                 offsets.push((start + i) - center as isize);
             }
 
-            if let Ok(asym_vals) = crate::coefficients::compute_coefficients_for_offsets_with_delta(&offsets, self.config.poly_order, derivative_order, delta) {
-                let asym = asym_vals;
+            // Try to get cached asymmetric/delta-aware coefficients
+            if let Ok(asym_vals) = self.cache.get_coefficients_for_offsets_with_delta(&offsets, self.config.poly_order, derivative_order, delta) {
+                let asym = asym_vals.clone();
 
                 let mut sum = 0.0;
                 for j in 0..window_size {
@@ -297,6 +300,19 @@ impl SavitzkyGolayFilter {
                     data[0]
                 } else {
                     data[n - 1]
+                }
+            }
+            BoundaryMode::Interp => {
+                // Linear extrapolation using edge slope
+                if n < 2 { return data.get(0).copied().unwrap_or(0.0); }
+                if requested_idx < 0 {
+                    let left_slope = data[1] - data[0];
+                    let dist = -(requested_idx as isize) as f64;
+                    data[0] - left_slope * dist
+                } else {
+                    let right_slope = data[n - 1] - data[n - 2];
+                    let dist = (requested_idx as isize - (n as isize - 1)) as f64;
+                    data[n - 1] + right_slope * dist
                 }
             }
             BoundaryMode::Shrink => {

@@ -167,16 +167,6 @@ impl Default for CoefficientCache {
 }
 
 
-/// Modes for handling signal boundaries during filtering.
-#[derive(Debug, Clone, Copy)]
-pub enum BoundaryMode {
-    Mirror,
-    Constant,
-    Nearest,
-    Wrap,
-    Interp,
-}
-
 /// Applies Savitzky-Golay filter to a signal with specified boundary mode.
 ///
 /// # Arguments
@@ -192,7 +182,7 @@ pub enum BoundaryMode {
 pub fn apply_filter_with_mode(
     signal: &[f64],
     coefficients: &[f64],
-    mode: BoundaryMode,
+    mode: crate::filter::BoundaryMode,
 ) -> Result<Vec<f64>> {
     if signal.is_empty() || coefficients.is_empty() {
         return Err(SavitzkyGolayError::InvalidInput("Signal or coefficients are empty".to_string()));
@@ -204,7 +194,7 @@ pub fn apply_filter_with_mode(
 
     // Pad the signal based on mode
     match mode {
-        BoundaryMode::Mirror => {
+        crate::filter::BoundaryMode::Mirror => {
             // Mirror at boundaries
             for i in 0..half_window {
                 padded_signal[i] = signal[half_window - i];
@@ -212,7 +202,7 @@ pub fn apply_filter_with_mode(
             }
             padded_signal[half_window..half_window + signal.len()].copy_from_slice(signal);
         }
-        BoundaryMode::Constant => {
+    crate::filter::BoundaryMode::Constant => {
             // Pad with edge values
             let left_val = signal[0];
             let right_val = signal[signal.len() - 1];
@@ -222,7 +212,7 @@ pub fn apply_filter_with_mode(
             }
             padded_signal[half_window..half_window + signal.len()].copy_from_slice(signal);
         }
-        BoundaryMode::Nearest => {
+    crate::filter::BoundaryMode::Nearest => {
             // Repeat nearest values (similar to constant but per position)
             for i in 0..half_window {
                 padded_signal[i] = signal[0];
@@ -230,7 +220,7 @@ pub fn apply_filter_with_mode(
             }
             padded_signal[half_window..half_window + signal.len()].copy_from_slice(signal);
         }
-        BoundaryMode::Wrap => {
+    crate::filter::BoundaryMode::Wrap => {
             // Wrap around
             for i in 0..half_window {
                 padded_signal[i] = signal[signal.len() - half_window + i];
@@ -238,7 +228,7 @@ pub fn apply_filter_with_mode(
             }
             padded_signal[half_window..half_window + signal.len()].copy_from_slice(signal);
         }
-        BoundaryMode::Interp => {
+    crate::filter::BoundaryMode::Interp => {
             // Linear interpolation/extrapolation
             if signal.len() >= 2 {
                 let left_slope = signal[1] - signal[0];
@@ -251,6 +241,23 @@ pub fn apply_filter_with_mode(
                 // Fallback to constant if not enough points
                 let val = *signal.get(0).unwrap_or(&0.0);
                 padded_signal.fill(val);
+            }
+            padded_signal[half_window..half_window + signal.len()].copy_from_slice(signal);
+        }
+        crate::filter::BoundaryMode::Zero => {
+            // Pad with zeros
+            for i in 0..padded_len {
+                padded_signal[i] = 0.0;
+            }
+            padded_signal[half_window..half_window + signal.len()].copy_from_slice(signal);
+        }
+        crate::filter::BoundaryMode::Shrink => {
+            // Fall back to constant padding for now
+            let left_val = signal.get(0).copied().unwrap_or(0.0);
+            let right_val = signal.last().copied().unwrap_or(0.0);
+            for i in 0..half_window {
+                padded_signal[i] = left_val;
+                padded_signal[padded_len - 1 - i] = right_val;
             }
             padded_signal[half_window..half_window + signal.len()].copy_from_slice(signal);
         }
@@ -308,7 +315,7 @@ mod tests {
     fn test_apply_filter_mirror_mode() {
         let coeffs = compute_coefficients(5, 2, 0).unwrap();
         let signal = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0];
-        let filtered = apply_filter_with_mode(&signal, &coeffs, BoundaryMode::Mirror).unwrap();
+    let filtered = apply_filter_with_mode(&signal, &coeffs, crate::filter::BoundaryMode::Mirror).unwrap();
         
         // Check that filtered signal has same length as input
         assert_eq!(filtered.len(), signal.len());
@@ -322,7 +329,7 @@ mod tests {
     fn test_apply_filter_constant_mode() {
         let coeffs = compute_coefficients(5, 2, 0).unwrap();
         let signal = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let filtered = apply_filter_with_mode(&signal, &coeffs, BoundaryMode::Constant).unwrap();
+    let filtered = apply_filter_with_mode(&signal, &coeffs, crate::filter::BoundaryMode::Constant).unwrap();
         
         assert_eq!(filtered.len(), signal.len());
         for &val in &filtered {
@@ -334,7 +341,7 @@ mod tests {
     fn test_apply_filter_nearest_mode() {
         let coeffs = compute_coefficients(5, 2, 0).unwrap();
         let signal = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let filtered = apply_filter_with_mode(&signal, &coeffs, BoundaryMode::Nearest).unwrap();
+    let filtered = apply_filter_with_mode(&signal, &coeffs, crate::filter::BoundaryMode::Nearest).unwrap();
         
         assert_eq!(filtered.len(), signal.len());
         for &val in &filtered {
@@ -346,7 +353,7 @@ mod tests {
     fn test_apply_filter_wrap_mode() {
         let coeffs = compute_coefficients(5, 2, 0).unwrap();
         let signal = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let filtered = apply_filter_with_mode(&signal, &coeffs, BoundaryMode::Wrap).unwrap();
+    let filtered = apply_filter_with_mode(&signal, &coeffs, crate::filter::BoundaryMode::Wrap).unwrap();
         
         assert_eq!(filtered.len(), signal.len());
         for &val in &filtered {
@@ -358,7 +365,7 @@ mod tests {
     fn test_apply_filter_interp_mode() {
         let coeffs = compute_coefficients(5, 2, 0).unwrap();
         let signal = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        let filtered = apply_filter_with_mode(&signal, &coeffs, BoundaryMode::Interp).unwrap();
+    let filtered = apply_filter_with_mode(&signal, &coeffs, crate::filter::BoundaryMode::Interp).unwrap();
         
         assert_eq!(filtered.len(), signal.len());
         for &val in &filtered {
@@ -370,7 +377,7 @@ mod tests {
     fn test_apply_filter_empty_signal() {
         let coeffs = compute_coefficients(5, 2, 0).unwrap();
         let signal = vec![];
-        let result = apply_filter_with_mode(&signal, &coeffs, BoundaryMode::Mirror);
+    let result = apply_filter_with_mode(&signal, &coeffs, crate::filter::BoundaryMode::Mirror);
         assert!(result.is_err());
     }
 
@@ -378,61 +385,13 @@ mod tests {
     fn test_apply_filter_empty_coeffs() {
         let coeffs = vec![];
         let signal = vec![1.0, 2.0, 3.0];
-        let result = apply_filter_with_mode(&signal, &coeffs, BoundaryMode::Mirror);
+    let result = apply_filter_with_mode(&signal, &coeffs, crate::filter::BoundaryMode::Mirror);
         assert!(result.is_err());
     }
 }
 
-/// Compute filter coefficients for arbitrary x offsets (not necessarily symmetric).
-/// Offsets are positions of the sample points relative to evaluation point (center), e.g. [-2, -1, 0, 1, 2]
-pub fn compute_coefficients_for_offsets(
-    offsets: &[isize],
-    poly_order: usize,
-    derivative: usize,
-) -> Result<Vec<f64>> {
-    let window_size = offsets.len();
-    if window_size == 0 {
-        return Err(SavitzkyGolayError::InvalidWindowSize(0));
-    }
-
-    if poly_order >= window_size {
-        return Err(SavitzkyGolayError::InvalidPolynomialOrder(poly_order, window_size));
-    }
-
-    // Build Vandermonde with given offsets
-    let mut vandermonde = DMatrix::<f64>::zeros(window_size, poly_order + 1);
-    for (i, &off) in offsets.iter().enumerate() {
-        let x = off as f64;
-        for j in 0..=poly_order {
-            vandermonde[(i, j)] = x.powi(j as i32);
-        }
-    }
-
-    let ata = vandermonde.transpose() * &vandermonde;
-    let mut rhs = DVector::<f64>::zeros(poly_order + 1);
-
-    if derivative <= poly_order {
-        let factorial = (1..=derivative).fold(1.0, |acc, x| acc * x as f64);
-        rhs[derivative] = factorial;
-    } else {
-        return Ok(vec![0.0; window_size]);
-    }
-
-    let coeffs_poly = ata.lu().solve(&rhs)
-        .ok_or_else(|| SavitzkyGolayError::ComputationError(
-            "Failed to solve least squares system (offsets)".to_string()
-        ))?;
-
-    let mut filter_coeffs = vec![0.0; window_size];
-    for i in 0..window_size {
-        let x = offsets[i] as f64;
-        for j in 0..=poly_order {
-            filter_coeffs[i] += coeffs_poly[j] * x.powi(j as i32);
-        }
-    }
-
-    Ok(filter_coeffs)
-}
+// Non-delta offsets variant removed; use `compute_coefficients_for_offsets_with_delta` for
+// asymmetric coefficient computation (pass delta=1.0 for unit spacing).
 
 /// Compute coefficients taking the sample spacing `delta` into account.
 /// Using `delta` here builds the Vandermonde in the real x-units so the returned
@@ -538,4 +497,15 @@ pub fn compute_coefficients_for_offsets_with_delta(
     }
 
     Ok(filter_coeffs)
+}
+
+/// Backwards-compatible wrapper: compute coefficients for arbitrary offsets using unit spacing.
+/// This preserves the old API while keeping the canonical implementation in
+/// `compute_coefficients_for_offsets_with_delta`.
+pub fn compute_coefficients_for_offsets(
+    offsets: &[isize],
+    poly_order: usize,
+    derivative: usize,
+) -> Result<Vec<f64>> {
+    compute_coefficients_for_offsets_with_delta(offsets, poly_order, derivative, 1.0)
 }
