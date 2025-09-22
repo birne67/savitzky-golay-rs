@@ -168,6 +168,44 @@ Where:
 - **Local Operation**: Each output point depends only on nearby input points
 - **Linear Phase**: Symmetric filters have linear phase response
 
+## Sampling spacing (delta) and units
+
+The library treats the sampling spacing (often called `delta` or the sample period) explicitly when computing coefficients. There are two important rules to understand:
+
+- Coefficients computed with delta = 1 correspond to unit-spaced samples. When you call convenience helpers that assume unit spacing this is what they return.
+- For mathematically-correct derivatives in physical units (e.g., derivative with respect to time in seconds), the filter builds the Vandermonde matrix using x = offset * delta (so polynomial basis powers are in physical units). That is implemented by the `compute_coefficients_with_delta(...)` and `compute_coefficients_for_offsets_with_delta(...)` helpers.
+
+Consequences:
+- If you pass `delta != 1.0` to `apply_derivative(..., delta)`, the filter computes coefficients with the given `delta` so the returned derivative values are already scaled to the correct physical units (no additional ad-hoc scaling required).
+- If you use cached/unit coefficients (delta == 1.0) the implementation will reuse the cached kernels for performance.
+
+Example:
+
+```rust
+let mut filter = SavitzkyGolayFilter::new(7, 3)?;
+// data sampled every 0.01 seconds
+let derivative = filter.apply_derivative(&data, 1, 0.01);
+// derivative is in units per second
+```
+
+## Boundary and edge strategy (exact polynomial preservation)
+
+Achieving exact polynomial preservation at the domain boundaries requires special handling because the symmetric central window is not fully available at edges. This crate uses a mathematically-sound approach:
+
+- Interior points: use symmetric, cached coefficients computed on the configured window (fast and exact for interior polynomial reproduction).
+- Edge points: rather than padding the signal and applying the central kernel, the filter constructs a contiguous, in-bounds window of samples that is shifted toward the center (so it contains `window_size` real sample indices). It then computes local, asymmetric coefficients for that specific set of offsets using the same least-squares Vandermonde approach but with x = offset * delta. Those asymmetric coefficients reproduce polynomials up to the chosen order exactly at that center point.
+
+This has two advantages:
+
+- Mathematical correctness: coefficients are computed in physical units and the asymmetric local kernels preserve polynomials at edges.
+- Predictable behavior: the result at edges matches the same polynomial-preserving guarantee as interior points (no ad-hoc extrapolation scaling).
+
+Performance note and caching
+
+Computing asymmetric/delta-aware coefficients at many edge positions can be slightly more expensive than applying a fixed central kernel. To mitigate this, the implementation caches asymmetric coefficients keyed by a compact hash of the offsets, polynomial order, derivative order, and the `delta` bit-pattern. On subsequent uses of the same offsets/delta the cached coefficients are reused. If you filter many signals with the same geometry this gives good performance while maintaining exact polynomial behavior at boundaries.
+
+If you prefer cheaper edge behavior in exchange for approximate preservation, you can still select other boundary modes (see `BoundaryMode`) which pad or extrapolate the signal before applying a central kernel, but those will not guarantee exact polynomial reproduction at the edges.
+
 ## When to Use Savitzky-Golay Filters
 
 ✅ **Good for:**
