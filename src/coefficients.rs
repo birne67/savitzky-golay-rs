@@ -405,3 +405,109 @@ pub fn compute_coefficients_for_offsets(
 
     Ok(filter_coeffs)
 }
+
+/// Compute coefficients taking the sample spacing `delta` into account.
+/// Using `delta` here builds the Vandermonde in the real x-units so the returned
+/// filter coefficients directly approximate the derivative of order `derivative`
+/// in physical units (no later scaling required).
+pub fn compute_coefficients_with_delta(
+    window_size: usize,
+    poly_order: usize,
+    derivative: usize,
+    delta: f64,
+) -> Result<Vec<f64>> {
+    // Validate parameters (reuse existing checks)
+    if window_size % 2 == 0 || window_size == 0 {
+        return Err(SavitzkyGolayError::InvalidWindowSize(window_size));
+    }
+    if poly_order >= window_size {
+        return Err(SavitzkyGolayError::InvalidPolynomialOrder(poly_order, window_size));
+    }
+
+    let half_window = (window_size - 1) / 2;
+    let num_points = window_size;
+
+    // Build Vandermonde in x-units (x = offset * delta)
+    let mut vandermonde = DMatrix::<f64>::zeros(num_points, poly_order + 1);
+    for i in 0..num_points {
+        let x = ((i as isize) - (half_window as isize)) as f64 * delta;
+        for j in 0..=poly_order {
+            vandermonde[(i, j)] = x.powi(j as i32);
+        }
+    }
+
+    let ata = vandermonde.transpose() * &vandermonde;
+    let mut rhs = DVector::<f64>::zeros(poly_order + 1);
+
+    if derivative <= poly_order {
+        let factorial = (1..=derivative).fold(1.0, |acc, x| acc * x as f64);
+        rhs[derivative] = factorial;
+    } else {
+        return Ok(vec![0.0; window_size]);
+    }
+
+    let coeffs_poly = ata.lu().solve(&rhs)
+        .ok_or_else(|| SavitzkyGolayError::ComputationError(
+            "Failed to solve least squares system".to_string()
+        ))?;
+
+    let mut filter_coeffs = vec![0.0; window_size];
+    for i in 0..window_size {
+        let x = ((i as isize) - (half_window as isize)) as f64 * delta;
+        for j in 0..=poly_order {
+            filter_coeffs[i] += coeffs_poly[j] * x.powi(j as i32);
+        }
+    }
+
+    Ok(filter_coeffs)
+}
+
+/// As above but accepts `delta` to express offsets in physical units.
+pub fn compute_coefficients_for_offsets_with_delta(
+    offsets: &[isize],
+    poly_order: usize,
+    derivative: usize,
+    delta: f64,
+) -> Result<Vec<f64>> {
+    let window_size = offsets.len();
+    if window_size == 0 {
+        return Err(SavitzkyGolayError::InvalidWindowSize(0));
+    }
+
+    if poly_order >= window_size {
+        return Err(SavitzkyGolayError::InvalidPolynomialOrder(poly_order, window_size));
+    }
+
+    let mut vandermonde = DMatrix::<f64>::zeros(window_size, poly_order + 1);
+    for (i, &off) in offsets.iter().enumerate() {
+        let x = off as f64 * delta;
+        for j in 0..=poly_order {
+            vandermonde[(i, j)] = x.powi(j as i32);
+        }
+    }
+
+    let ata = vandermonde.transpose() * &vandermonde;
+    let mut rhs = DVector::<f64>::zeros(poly_order + 1);
+
+    if derivative <= poly_order {
+        let factorial = (1..=derivative).fold(1.0, |acc, x| acc * x as f64);
+        rhs[derivative] = factorial;
+    } else {
+        return Ok(vec![0.0; window_size]);
+    }
+
+    let coeffs_poly = ata.lu().solve(&rhs)
+        .ok_or_else(|| SavitzkyGolayError::ComputationError(
+            "Failed to solve least squares system (offsets)".to_string()
+        ))?;
+
+    let mut filter_coeffs = vec![0.0; window_size];
+    for i in 0..window_size {
+        let x = offsets[i] as f64 * delta;
+        for j in 0..=poly_order {
+            filter_coeffs[i] += coeffs_poly[j] * x.powi(j as i32);
+        }
+    }
+
+    Ok(filter_coeffs)
+}
