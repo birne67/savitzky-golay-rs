@@ -82,12 +82,12 @@ fn test_derivative_computation() {
         .collect();
     
     let first_derivative = filter.apply_derivative(&data, 1, step);
-    
-    // Check derivative values in the interior
+
+    // Check derivative values in the interior (physical derivative: d/dt x^4 = 4 x^3)
     for i in 3..17 {
         let x = i as f64 * step;
-        let expected_derivative = 4.0 * x.powi(3) / step; // Account for discrete spacing
-        
+        let expected_derivative = 4.0 * x.powi(3);
+
         // Allow some tolerance due to numerical approximation
         assert_abs_diff_eq!(first_derivative[i], expected_derivative, epsilon = 0.1);
     }

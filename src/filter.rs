@@ -146,23 +146,27 @@ impl SavitzkyGolayFilter {
             return vec![0.0; data.len()];
         }
 
-        let mut coeffs = self.cache
+        // Use delta-aware coefficient computation and cache if possible.
+        // For now retrieve symmetric coefficients computed on unit spacing, then recompute with delta if needed.
+        // Try to use cache first for unit-delta coefficients
+        let coeffs_unit = self.cache
             .get_coefficients(self.config.window_size, self.config.poly_order, derivative_order)
             .expect("Coefficient computation failed")
-            .clone(); // Clone to avoid borrowing issues
+            .clone();
 
-        // Scale derivative coefficients by (1/delta)^m where m is derivative_order
-        if derivative_order > 0 {
-            // Scale by (1/delta)^(m+1) to account for discrete sampling spacing.
-            // This empirically matches the expectations in the integration tests
-            // which compare against finite-difference-style scaling.
-            let scale = delta.powi(-((derivative_order as i32) + 1));
-            for c in coeffs.iter_mut() {
-                *c *= scale;
-            }
+        // If delta == 1.0, we can use cached coefficients; otherwise compute exact coefficients with delta
+        if (delta - 1.0).abs() < std::f64::EPSILON {
+            self.apply_with_coefficients(data, &coeffs_unit, derivative_order, delta)
+        } else {
+            // Compute coefficients for the given delta (no ad-hoc scaling)
+            let coeffs = crate::coefficients::compute_coefficients_with_delta(
+                self.config.window_size,
+                self.config.poly_order,
+                derivative_order,
+                delta,
+            ).expect("Coefficient computation with delta failed");
+            self.apply_with_coefficients(data, &coeffs, derivative_order, delta)
         }
-
-        self.apply_with_coefficients(data, &coeffs, derivative_order, delta)
     }
     
     /// Internal method to apply filter with given coefficients
@@ -208,11 +212,8 @@ impl SavitzkyGolayFilter {
                 offsets.push((start + i) - center as isize);
             }
 
-            if let Ok(mut asym) = crate::coefficients::compute_coefficients_for_offsets(&offsets, self.config.poly_order, derivative_order) {
-                if derivative_order > 0 {
-                    let scale = delta.powi(-((derivative_order as i32) + 1));
-                    for c in asym.iter_mut() { *c *= scale; }
-                }
+            if let Ok(asym_vals) = crate::coefficients::compute_coefficients_for_offsets_with_delta(&offsets, self.config.poly_order, derivative_order, delta) {
+                let asym = asym_vals;
 
                 let mut sum = 0.0;
                 for j in 0..window_size {

@@ -16,6 +16,7 @@ path = "src/lib.rs"
 
 [dependencies]
 nalgebra = "0.32"
+ahash = "0.8"
 
 [dev-dependencies]
 approx = "0.5"

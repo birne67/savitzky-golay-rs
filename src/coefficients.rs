@@ -82,6 +82,8 @@ pub fn compute_coefficients(
 /// This provides faster access to frequently used coefficient sets.
 pub struct CoefficientCache {
     coefficients: std::collections::HashMap<(usize, usize, usize), Vec<f64>>,
+    // Cache for asymmetric/delta-aware coefficients: key is (hash_of_offsets, poly_order, derivative, delta_bits)
+    asymmetric: std::collections::HashMap<(u64, usize, usize, u64), Vec<f64>>,
 }
 
 impl CoefficientCache {
@@ -89,6 +91,7 @@ impl CoefficientCache {
     pub fn new() -> Self {
         Self {
             coefficients: std::collections::HashMap::new(),
+            asymmetric: std::collections::HashMap::new(),
         }
     }
     
@@ -107,6 +110,31 @@ impl CoefficientCache {
         }
         
         Ok(&self.coefficients[&key])
+    }
+
+    /// Get asymmetric/delta-aware coefficients, caching them by a hash of offsets, poly order, derivative and delta.
+    pub fn get_coefficients_for_offsets_with_delta(
+        &mut self,
+        offsets: &[isize],
+        poly_order: usize,
+        derivative: usize,
+        delta: f64,
+    ) -> Result<&Vec<f64>> {
+        // Build a small hash of offsets
+        use std::hash::{Hasher, Hash};
+        let mut hasher = ahash::AHasher::default();
+        offsets.hash(&mut hasher);
+        let offsets_hash = hasher.finish();
+
+        let delta_bits = delta.to_bits();
+        let key = (offsets_hash, poly_order, derivative, delta_bits);
+
+        if !self.asymmetric.contains_key(&key) {
+            let coeffs = compute_coefficients_for_offsets_with_delta(offsets, poly_order, derivative, delta)?;
+            self.asymmetric.insert(key, coeffs);
+        }
+
+        Ok(&self.asymmetric[&key])
     }
     
     /// Precomputes coefficients for common configurations
