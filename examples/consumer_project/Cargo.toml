@@ -6,3 +6,11 @@ edition = "2021"
 [dependencies]
 # Use a path dependency pointing to the local crate under the workspace
 savitzky_golay = { path = "../../" }
+
+csv = "1.3"
+eframe = "0.27"
+egui_plot = "0.27"
+
+[[bin]]
+name = "append_smoothed"
+path = "src/append_smoothed.rs"

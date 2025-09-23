@@ -1,7 +1,9 @@
-use savitzky_golay::{smooth, SavitzkyGolayFilter, BoundaryMode};
+use savitzky_golay::{smooth, SavitzkyGolayFilter, BoundaryMode, read_csv_column};
 
-fn main() {
-    let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let data = read_csv_column("data.csv", "A")?;
+    println!("{:?}", data);
+
 
     // Use convenience function
     let sm = smooth(&data);
@@ -17,4 +19,6 @@ fn main() {
     let mut filter_d = SavitzkyGolayFilter::new(5, 3).expect("valid params");
     let deriv = filter_d.apply_derivative(&data, 1, 1.0);
     println!("derivative: {:?}", deriv);
+
+    Ok(())
 }
