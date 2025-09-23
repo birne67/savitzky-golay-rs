@@ -28,10 +28,12 @@
 mod coefficients;
 mod filter;
 mod error;
+mod csv_utils;
 
 pub use filter::{SavitzkyGolayFilter, BoundaryMode, FilterConfig};
 pub use error::{SavitzkyGolayError, Result};
 pub use coefficients::compute_coefficients;
+pub use csv_utils::{read_csv_column, read_csv_column_by_index};
 
 /// Applies a Savitzky-Golay filter to the input data with default parameters.
 ///
