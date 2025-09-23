@@ -6,7 +6,13 @@ authors = ["Your Name <your.email@example.com>"]
 description = "A high-performance Savitzky-Golay filter implementation for signal smoothing and differentiation"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/yourusername/savitzky-golay"
-keywords = ["signal-processing", "filter", "smoothing", "savitzky-golay", "numerical"]
+keywords = [
+    "signal-processing",
+    "filter",
+    "smoothing",
+    "savitzky-golay",
+    "numerical",
+]
 categories = ["science", "algorithms"]
 readme = "README.md"
 
@@ -15,10 +21,15 @@ name = "savitzky_golay"
 path = "src/lib.rs"
 
 [dependencies]
-nalgebra = "0.32"
+nalgebra = "0.34.1"
 ahash = "0.8"
 csv = "1.3"
+eframe = "0.32.3"
+egui_plot = "0.33.0"
 
 [dev-dependencies]
-approx = "0.5"
+approx = "0.5.1"
 
+[[bin]]
+name = "append_smoothed"
+path = "examples/consumer_project/src/append_smoothed.rs"
