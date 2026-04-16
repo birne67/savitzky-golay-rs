@@ -1,3 +1,9 @@
+/// Savitzky-Golay filter implementation.
+///
+/// This module provides the core filtering functionality for applying
+/// Savitzky-Golay smoothing and differentiation to data series.
+/// It includes the main [`SavitzkyGolayFilter`] struct, configuration options,
+/// and boundary handling strategies.
 use crate::coefficients::CoefficientCache;
 use crate::error::{Result, SavitzkyGolayError};
 
@@ -37,11 +43,14 @@ impl FilterConfig {
         if window_size % 2 == 0 || window_size == 0 {
             return Err(SavitzkyGolayError::InvalidWindowSize(window_size));
         }
-        
+
         if poly_order >= window_size {
-            return Err(SavitzkyGolayError::InvalidPolynomialOrder(poly_order, window_size));
+            return Err(SavitzkyGolayError::InvalidPolynomialOrder(
+                poly_order,
+                window_size,
+            ));
         }
-        
+
         Ok(Self {
             window_size,
             poly_order,
@@ -49,7 +58,7 @@ impl FilterConfig {
             boundary_mode: BoundaryMode::Mirror,
         })
     }
-    
+
     /// Sets the boundary handling mode
     pub fn with_boundary_mode(mut self, mode: BoundaryMode) -> Self {
         self.boundary_mode = mode;
@@ -85,7 +94,7 @@ impl SavitzkyGolayFilter {
             cache: CoefficientCache::default(),
         })
     }
-    
+
     /// Creates a filter with custom configuration
     pub fn with_config(config: FilterConfig) -> Self {
         Self {
@@ -93,13 +102,13 @@ impl SavitzkyGolayFilter {
             cache: CoefficientCache::default(),
         }
     }
-    
+
     /// Sets the boundary handling mode
     pub fn with_boundary_mode(mut self, mode: BoundaryMode) -> Self {
         self.config.boundary_mode = mode;
         self
     }
-    
+
     /// Applies the Savitzky-Golay filter to smooth the input data.
     ///
     /// # Arguments
@@ -124,15 +133,16 @@ impl SavitzkyGolayFilter {
             // For very short data, return a copy
             return data.to_vec();
         }
-        
-        let coeffs = self.cache
+
+        let coeffs = self
+            .cache
             .get_coefficients(self.config.window_size, self.config.poly_order, 0)
             .expect("Coefficient computation failed")
             .clone(); // Clone to avoid borrowing issues
 
         self.apply_with_coefficients(data, &coeffs, 0, 1.0)
     }
-    
+
     /// Applies the Savitzky-Golay filter to compute derivatives of the input data.
     ///
     /// # Arguments
@@ -143,7 +153,12 @@ impl SavitzkyGolayFilter {
     /// # Returns
     ///
     /// A vector containing the derivative data
-    pub fn apply_derivative(&mut self, data: &[f64], derivative_order: usize, delta: f64) -> Vec<f64> {
+    pub fn apply_derivative(
+        &mut self,
+        data: &[f64],
+        derivative_order: usize,
+        delta: f64,
+    ) -> Vec<f64> {
         if data.len() < self.config.window_size {
             return vec![0.0; data.len()];
         }
@@ -151,8 +166,13 @@ impl SavitzkyGolayFilter {
         // Use delta-aware coefficient computation and cache if possible.
         // For now retrieve symmetric coefficients computed on unit spacing, then recompute with delta if needed.
         // Try to use cache first for unit-delta coefficients
-        let coeffs_unit = self.cache
-            .get_coefficients(self.config.window_size, self.config.poly_order, derivative_order)
+        let coeffs_unit = self
+            .cache
+            .get_coefficients(
+                self.config.window_size,
+                self.config.poly_order,
+                derivative_order,
+            )
             .expect("Coefficient computation failed")
             .clone();
 
@@ -166,25 +186,33 @@ impl SavitzkyGolayFilter {
                 self.config.poly_order,
                 derivative_order,
                 delta,
-            ).expect("Coefficient computation with delta failed");
+            )
+            .expect("Coefficient computation with delta failed");
             self.apply_with_coefficients(data, &coeffs, derivative_order, delta)
         }
     }
-    
+
     /// Internal method to apply filter with given coefficients
-    fn apply_with_coefficients(&mut self, data: &[f64], coeffs: &[f64], derivative_order: usize, delta: f64) -> Vec<f64> {
+    fn apply_with_coefficients(
+        &mut self,
+        data: &[f64],
+        coeffs: &[f64],
+        derivative_order: usize,
+        delta: f64,
+    ) -> Vec<f64> {
         let n = data.len();
         let mut result = vec![0.0; n];
         let half_window = self.config.window_size / 2;
 
         // Handle each point in the signal
         for i in 0..n {
-            result[i] = self.compute_filtered_value(data, i, coeffs, half_window, derivative_order, delta);
+            result[i] =
+                self.compute_filtered_value(data, i, coeffs, half_window, derivative_order, delta);
         }
 
         result
     }
-    
+
     /// Computes the filtered value at a specific point
     fn compute_filtered_value(
         &mut self,
@@ -205,8 +233,12 @@ impl SavitzkyGolayFilter {
 
             // Compute start so that [start, start+wn) is within [0, n)
             let mut start = center as isize - hw;
-            if start < 0 { start = 0; }
-            if start + wn > n as isize { start = n as isize - wn; }
+            if start < 0 {
+                start = 0;
+            }
+            if start + wn > n as isize {
+                start = n as isize - wn;
+            }
 
             // Build offsets of the samples relative to the center
             let mut offsets: Vec<isize> = Vec::with_capacity(window_size);
@@ -215,7 +247,12 @@ impl SavitzkyGolayFilter {
             }
 
             // Try to get cached asymmetric/delta-aware coefficients
-            if let Ok(asym_vals) = self.cache.get_coefficients_for_offsets_with_delta(&offsets, self.config.poly_order, derivative_order, delta) {
+            if let Ok(asym_vals) = self.cache.get_coefficients_for_offsets_with_delta(
+                &offsets,
+                self.config.poly_order,
+                derivative_order,
+                delta,
+            ) {
                 let asym = asym_vals.clone();
 
                 let mut sum = 0.0;
@@ -248,15 +285,11 @@ impl SavitzkyGolayFilter {
 
         sum
     }
-    
+
     /// Gets a value for boundary handling
-    fn get_boundary_value(
-        &self,
-        data: &[f64],
-        requested_idx: isize,
-    ) -> f64 {
+    fn get_boundary_value(&self, data: &[f64], requested_idx: isize) -> f64 {
         let n = data.len();
-        
+
         match self.config.boundary_mode {
             BoundaryMode::Constant => {
                 if requested_idx < 0 {
@@ -277,11 +310,7 @@ impl SavitzkyGolayFilter {
                 } else {
                     // Mirror around the end
                     let overflow = requested_idx as usize - (n - 1);
-                    let mirrored_idx = if overflow < n {
-                        n - 1 - overflow
-                    } else {
-                        0
-                    };
+                    let mirrored_idx = if overflow < n { n - 1 - overflow } else { 0 };
                     data[mirrored_idx]
                 }
             }
@@ -304,7 +333,9 @@ impl SavitzkyGolayFilter {
             }
             BoundaryMode::Interp => {
                 // Linear extrapolation using edge slope
-                if n < 2 { return data.get(0).copied().unwrap_or(0.0); }
+                if n < 2 {
+                    return data.get(0).copied().unwrap_or(0.0);
+                }
                 if requested_idx < 0 {
                     let left_slope = data[1] - data[0];
                     let dist = -(requested_idx as isize) as f64;
@@ -326,7 +357,7 @@ impl SavitzkyGolayFilter {
             }
         }
     }
-    
+
     /// Returns the filter configuration
     pub fn config(&self) -> &FilterConfig {
         &self.config
@@ -343,63 +374,63 @@ mod tests {
         let mut filter = SavitzkyGolayFilter::new(5, 2).unwrap();
         let data = vec![1.0, 2.0, 3.0, 4.0, 5.0, 4.0, 3.0, 2.0, 1.0];
         let smoothed = filter.apply(&data);
-        
+
         // The smoothed signal should be less noisy
         assert_eq!(smoothed.len(), data.len());
-        
+
         // Check that the filter preserves the general trend
         // (exact values depend on the specific implementation details)
         assert!(smoothed[4] > smoothed[0]); // Peak should still be higher than start
         assert!(smoothed[4] > smoothed[8]); // Peak should still be higher than end
     }
-    
+
     #[test]
     fn test_polynomial_preservation() {
         let mut filter = SavitzkyGolayFilter::new(5, 2).unwrap();
-        
+
         // Quadratic polynomial: y = x^2, use enough points so boundaries don't affect middle
         let data: Vec<f64> = (0..20).map(|x| (x as f64).powi(2)).collect();
         let smoothed = filter.apply(&data);
-        
+
         // Check middle points where boundary effects are minimal
         for i in 3..17 {
             assert_abs_diff_eq!(data[i], smoothed[i], epsilon = 1e-10);
         }
     }
-    
+
     #[test]
     fn test_derivative() {
         let mut filter = SavitzkyGolayFilter::new(5, 3).unwrap();
-        
+
         // Cubic polynomial: y = x^3, use enough points
         let data: Vec<f64> = (0..20).map(|x| (x as f64).powi(3)).collect();
-    let derivative = filter.apply_derivative(&data, 1, 1.0);
-        
+        let derivative = filter.apply_derivative(&data, 1, 1.0);
+
         // First derivative should be 3x^2, check middle points
         for i in 3..17 {
             let expected = 3.0 * (i as f64).powi(2);
             assert_abs_diff_eq!(derivative[i], expected, epsilon = 1e-6);
         }
     }
-    
+
     #[test]
     fn test_boundary_modes() {
         let mut filter = SavitzkyGolayFilter::new(5, 2)
             .unwrap()
             .with_boundary_mode(BoundaryMode::Zero);
-        
+
         let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
         let result = filter.apply(&data);
-        
+
         assert_eq!(result.len(), data.len());
     }
-    
+
     #[test]
     fn test_short_data() {
         let mut filter = SavitzkyGolayFilter::new(5, 2).unwrap();
         let data = vec![1.0, 2.0]; // Shorter than window size
         let result = filter.apply(&data);
-        
+
         assert_eq!(result, data); // Should return unchanged
     }
 }

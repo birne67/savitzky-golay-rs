@@ -1,4 +1,4 @@
- use savitzky_golay::SavitzkyGolayFilter;
+use savitzky_golay::SavitzkyGolayFilter;
 use std::time::Instant;
 
 fn main() {
@@ -29,6 +29,18 @@ fn main() {
         for (window_size, poly_order, description) in configs {
             let mut filter = SavitzkyGolayFilter::new(window_size, poly_order)
                 .expect("Valid parameters");
+            /* 
+            .expect("Valid parameters")
+            Error handling - This is an alternative to the ? operator (which propagates errors)
+            If creating the filter succeeds: Returns the filter normally
+            If creating the filter fails: Panics (crashes the program) with the message "Valid parameters"  (panics on errors)
+
+            When to use .expect():
+            When you're confident the parameters are valid
+            When you want the program to crash immediately if something goes wrong
+            During development/debugging when you want clear error messages
+            The .expect() approach is more "aggressive" - it assumes success and crashes if something goes wrong, rather than gracefully handling the error.
+            */
             
             // Warm up
             let _ = filter.apply(&data[0..std::cmp::min(100, size)]);

@@ -22,7 +22,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let output_path = "data.csv"; // Overwrite the same file
     let column_name = "Raw"; // Change as needed
     let python_column_name = "Python"; // Change as needed
-    let smoothed_col_name = "smoothed";
+    let rust_5_2_column_name = "Rust_5_2"; // Change as needed
+    let smoothed_col_name = "smoothed"; // New column for smoothed data
 
     // Read the whole CSV into memory
     let mut rdr = csv::Reader::from_path(input_path)?;
@@ -53,6 +54,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         python_column_name
     );
 
+    // read the rust_5_2 column as f64 for additional comparison
+    let rust_5_2_data = read_csv_column(input_path, rust_5_2_column_name)?;
+    println!(
+        "Read {} data points from column '{}'",
+        rust_5_2_data.len(),
+        rust_5_2_column_name
+    );
 
     // Apply Savitzky-Golay filter to the signal data
     // 41 is the window size (must be odd), 5 is the polynomial order
@@ -60,7 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // like used in the python example
     
     let mut nearest_filter =
-        SavitzkyGolayFilter::new(41, 5)?.with_boundary_mode(BoundaryMode::Nearest);
+        SavitzkyGolayFilter::new(41, 5)?.with_boundary_mode(BoundaryMode::Nearest);  // BoundaryMode::Nearest means it will repeat the nearest available data point to fill the missing values
     let smoothed = nearest_filter.apply(&data);
 
     // Add the new column to each record
@@ -105,6 +113,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             Ok(Box::new(PlotApp {
                 original,
                 python: python_data,
+                rust_5_2: rust_5_2_data,
                 smoothed: smoothed_vec,
             }))
         }),
@@ -116,6 +125,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 struct PlotApp {
     original: Vec<f64>,
     python: Vec<f64>,
+    rust_5_2: Vec<f64>,
     smoothed: Vec<f64>,
 }
 
@@ -143,6 +153,20 @@ impl eframe::App for PlotApp {
             // The python data points for verification of the calculation
             let points_python_vec: Vec<[f64; 2]> = self
                 .python
+                .iter()
+                .enumerate()
+                .filter_map(|(i, &y)| {
+                    if y.is_finite() {
+                        Some([i as f64, y])
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            // The rust_5_2 (window=5, polyorder=2) data points for additional impressions
+            let points_rust_5_2_vec: Vec<[f64; 2]> = self
+                .rust_5_2
                 .iter()
                 .enumerate()
                 .filter_map(|(i, &y)| {
@@ -191,6 +215,7 @@ impl eframe::App for PlotApp {
             // Collect lengths of data series
             let original_len = points_original_vec.len();
             let python_len = points_python_vec.len();
+            let rust_5_2_len = points_rust_5_2_vec.len();
             let smoothed_len = points_smoothed_vec.len();
 
             // Create the plot
@@ -221,6 +246,16 @@ impl eframe::App for PlotApp {
                         .stroke(Stroke::new(2.0, Color32::RED))
                         .style(egui_plot::LineStyle::Solid));
                     }
+                    // Plot the rust_5_2 data points
+                    if rust_5_2_len > 0 {
+                        plot_ui.line(Line::new(
+                            "Rust_5_2",
+                            PlotPoints::from(points_rust_5_2_vec.clone()),
+                        )
+                        .stroke(Stroke::new(2.0, Color32::DARK_GREEN))
+                        .style(egui_plot::LineStyle::Solid));
+                    }
+
                     // Plot the smoothed data points
                     if smoothed_len > 0 {
                         plot_ui.line(Line::new(
